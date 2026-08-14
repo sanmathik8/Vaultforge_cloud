@@ -1,55 +1,67 @@
-# VaultForge
+# 🔐 VaultForge — DevSecOps Platform & Container Delivery
 
-Framework-agnostic DevSecOps reference platform: secure build → scan → sign
-→ deploy → runtime-monitor, tested against OWASP PyGoat as the target app on Amazon ECS Fargate.
+[![AWS ECS Fargate](https://img.shields.io/badge/AWS-ECS_Fargate-FF9900?logo=amazon-aws&logoColor=white)](https://aws.amazon.com/ecs/)
+[![Terraform](https://img.shields.io/badge/IaC-Terraform_1.14+-844FBA?logo=terraform&logoColor=white)](https://www.terraform.io/)
+[![GitHub Actions](https://img.shields.io/badge/CI%2FCD-GitHub_Actions-2088FF?logo=github-actions&logoColor=white)](https://github.com/features/actions)
+[![Security Scans](https://img.shields.io/badge/Security-Checkov_%7C_Trivy_%7C_Cosign-10B981)](https://github.com/sanmathik8/VaultForge)
 
-Everything for this project lives inside this single root directory — no
-sibling `.github/`, `terraform/`, or `app/` folders outside `VaultForge/`.
+A reference **DevSecOps platform** securing containerized workloads on **Amazon ECS Fargate** without static AWS access credentials.
 
-```text
-VaultForge/
-├── .github/
-│   ├── workflows/
-│   │   ├── pipeline.yml          # orchestrator: calls security.yml, build.yml, deploy.yml, validate.yml
-│   │   ├── security.yml          # reusable: SAST (Semgrep), SCA (OSV), linters (Hadolint, Gitleaks)
-│   │   ├── build.yml             # reusable: Buildx, Syft SBOM, Trivy scan, Cosign sign, ECR push
-│   │   ├── deploy.yml            # reusable: Checkov IaC scan, ECS Fargate rolling deployment
-│   │   ├── validate.yml          # reusable: Smoke tests, OWASP ZAP DAST scan, SARIF uploads
-│   │   └── infra-bootstrap.yml   # manual-only: Terraform plan/apply for ECS/ECR/OIDC
-│   └── actions/graceful-exit/    # composite action for clear failure messages
-├── app/                          # target application (OWASP PyGoat)
-├── ecs/                          # ECS Fargate task definition templates
-│   └── task-definition.json      # Fargate task definition with non-root & read-only root FS
-├── terraform/
-│   ├── bootstrap/                # root module wiring oidc, ecr, and ecs_fargate sub-modules
-│   └── modules/{oidc,ecr,ecs_fargate}/
-├── scripts/                      # smoke-test.sh and pipeline helper scripts
-├── docs/                         # comprehensive system & operational documentation
-├── reports/                      # generated scan reports land here
-└── README.md
+---
+
+## 🎯 Architectural Overview
+
+VaultForge automates container security, supply-chain verification, and cloud deployment. It uses **OpenID Connect (OIDC)** identity federation to authenticate with AWS STS dynamically, runs pre-build IaC scans with **Checkov**, checks container CVEs with **Trivy**, generates CycloneDX SBOMs with **Syft**, keylessly signs container images with **Cosign**, and deploys non-root containers to Amazon ECS Fargate.
+
+```mermaid
+flowchart LR
+    A[👨‍💻 Git Push] --> B[🔑 AWS OIDC Authentication]
+    B --> C[🛡️ Checkov & Trivy Scan]
+    C --> D[📦 Syft SBOM & Cosign Sign]
+    D --> E[🐳 Amazon ECR]
+    E --> F[🚀 Amazon ECS Fargate]
+    F --> G[⚖️ Application Load Balancer]
 ```
 
-## Before contributing (for humans or AI agents)
+---
 
-1. Read `docs/architecture-overview.md` first — it explains *why* things are
-   structured this way, not just what's here.
-2. Everything belongs under this root. If a suitable folder already exists
-   for what you're adding, use it — don't create a parallel one.
-3. Terraform for infrastructure (`terraform/`) is intentionally
-   decoupled from the app deploy pipeline — it runs only via
-   `infra-bootstrap.yml`, never on a routine app push.
+## ⚡ Key Engineering Features
 
-## Single-Secret Architecture & Dynamic Infrastructure Discovery
+- **🔐 Passwordless OIDC Identity:** Eliminates static `AWS_ACCESS_KEY_ID` secrets by exchanging short-lived GitHub OIDC tokens with AWS STS.
+- **🛡️ Hardened Task Context:** ECS task definitions execute as a non-root user (`user: 10001:10001`) with read-only root filesystems (`readonlyRootFilesystem: true`) and in-memory `/tmp` mounts.
+- **📦 Keyless Image Signing:** Verifies container image authenticity with Cosign keyless Sigstore signatures using OIDC identity tokens.
+- **🏗️ Modular Terraform Infrastructure:** Declaratively provisions IAM OIDC roles, Amazon ECR repositories, and ECS Fargate clusters.
+- **🚀 Reusable CI/CD Workflows:** Modular pipeline architecture separating security (`security.yml`), build (`build.yml`), deploy (`deploy.yml`), and validation (`validate.yml`).
 
-VaultForge operates on an **Enterprise Single-Secret Policy**. Infrastructure metadata (ECR Repository URI, ECS Cluster Name, ECS Service Name, ALB DNS Name) is discovered automatically from AWS APIs after OpenID Connect (OIDC) authentication. **Developers do not copy infrastructure URLs into GitHub Secrets.**
+---
 
-### GitHub Configuration Matrix
+## 🛠️ Technology Stack
 
-| Name | Type | Purpose | How Value is Obtained |
-|---|---|---|---|
-| `AWS_ROLE_TO_ASSUME` | Secret | IAM Role ARN for OIDC authentication | From `terraform output cd_deploy_role_arn` |
-| `AWS_TERRAFORM_ROLE_ARN` | Secret | IAM Role ARN for manual IaC bootstrap | From `terraform output terraform_role_arn` |
-| `ALLOW_CRITICAL_CVES` | Variable | Bypass Trivy/Semgrep gates for PyGoat lab target | Set to `true` in GitHub Repository Variables |
-| `ECR_REPOSITORY_URL` | **Discovered** | Target ECR Repository URI | Auto-resolved from AWS Caller Identity & STS |
-| `ECS_CLUSTER_NAME` | **Discovered** | Target Amazon ECS Cluster | Auto-discovered via AWS ECS API (`aws ecs list-clusters`) |
-| `ALB_DNS_NAME` | **Discovered** | Target Application Load Balancer Endpoint | Auto-discovered via AWS ELBv2 API (`aws elbv2 describe-load-balancers`) |
+- **Cloud Services:** AWS ECS Fargate, Amazon ECR, Application Load Balancer (ALB), IAM OIDC, CloudWatch, S3 State Backend
+- **Infrastructure as Code:** Terraform 1.14+, Modular HCL
+- **Security Tools:** Checkov, Trivy, Cosign, Syft, Gitleaks, Hadolint
+- **Languages & Frameworks:** Python, Docker, YAML, Bash
+
+---
+
+## 🚀 Quickstart & Usage
+
+### 1. Provision AWS Infrastructure
+```bash
+cd terraform/bootstrap
+terraform init
+terraform apply
+```
+
+### 2. Trigger Automated CI/CD Pipeline
+Push any change to `main` branch to trigger `.github/workflows/pipeline.yml`:
+```bash
+git add .
+git commit -m "Deploy hardened workload"
+git push origin main
+```
+
+---
+
+## 📄 License
+Distributed under the MIT License.
