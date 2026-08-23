@@ -30,7 +30,9 @@ resource "aws_iam_role" "ecr_push" {
             "repo:sanmathik8*:*",
             "repo:sanmathik8@*:*",
             "repo:sanmathik8/Vaultforge:*",
-            "repo:sanmathik8/VaultForge:*"
+            "repo:sanmathik8/VaultForge:*",
+            "repo:sanmathik8/Vaultforge_cloud:*",
+            "repo:sanmathik8/VaultForge_cloud:*"
           ]
         }
       }
@@ -79,7 +81,9 @@ resource "aws_iam_role" "eks_deploy" {
             "repo:sanmathik8*:*",
             "repo:sanmathik8@*:*",
             "repo:sanmathik8/Vaultforge:*",
-            "repo:sanmathik8/VaultForge:*"
+            "repo:sanmathik8/VaultForge:*",
+            "repo:sanmathik8/Vaultforge_cloud:*",
+            "repo:sanmathik8/VaultForge_cloud:*"
           ]
         }
       }
@@ -145,7 +149,9 @@ resource "aws_iam_role" "terraform_bootstrap" {
             "repo:sanmathik8*:*",
             "repo:sanmathik8@*:*",
             "repo:sanmathik8/Vaultforge:*",
-            "repo:sanmathik8/VaultForge:*"
+            "repo:sanmathik8/VaultForge:*",
+            "repo:sanmathik8/Vaultforge_cloud:*",
+            "repo:sanmathik8/VaultForge_cloud:*"
           ]
         }
       }

@@ -17,5 +17,5 @@ variable "environment" {
 variable "github_repo" {
   description = "org/repo allowed to assume the CI/CD OIDC roles"
   type        = string
-  default     = "sanmathik8/Vaultforge"
+  default     = "sanmathik8/Vaultforge_cloud"
 }
