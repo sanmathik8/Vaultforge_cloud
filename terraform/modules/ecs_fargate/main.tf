@@ -204,7 +204,8 @@ resource "aws_ecs_task_definition" "app" {
       protocol      = "tcp"
     }]
 
-    readonlyRootFilesystem = false
+    readonlyRootFilesystem = true
+    user                   = "10001"
 
     mountPoints = [{
       sourceVolume  = "tmp-dir"
