@@ -38,6 +38,7 @@ jobs:
     permissions:
       contents: read
       security-events: write
+      issues: write
     uses: ./.github/workflows/security.yml
     with:
       app_path: ./app
@@ -53,6 +54,7 @@ jobs:
       contents: read
       id-token: write
       security-events: write
+      issues: write
     uses: ./.github/workflows/build.yml
     with:
       app_path: ./app

@@ -32,6 +32,7 @@ permissions:
   contents: read
   id-token: write
   security-events: write
+  issues: write
 
 env:
   APP_PATH: ${{ inputs.app_path || './app' }}
@@ -205,9 +206,12 @@ jobs:
     permissions:
       contents: read
       security-events: write
+      issues: write
     outputs:
       critical_count: ${{ steps.count.outputs.critical }}
       high_count: ${{ steps.count.outputs.high }}
+      medium_count: ${{ steps.count.outputs.medium }}
+      low_count: ${{ steps.count.outputs.low }}
       result: ${{ steps.gate.outcome }}
     steps:
       - uses: actions/download-artifact@v4
@@ -222,7 +226,7 @@ jobs:
         continue-on-error: true
         run: |
           trivy image --severity CRITICAL,HIGH --format sarif --output trivy-results.sarif ${{ env.IMAGE_NAME }}:${{ github.sha }} || true
-          trivy image --severity CRITICAL,HIGH --format json --output trivy-report.json ${{ env.IMAGE_NAME }}:${{ github.sha }} || true
+          trivy image --format json --output trivy-report.json ${{ env.IMAGE_NAME }}:${{ github.sha }} || true
       - name: Upload Trivy SARIF
         if: always() && hashFiles('trivy-results.sarif') != ''
         continue-on-error: true
@@ -235,21 +239,64 @@ jobs:
         run: |
           CRIT=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy-report.json 2>/dev/null || echo 0)
           HIGH=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy-report.json 2>/dev/null || echo 0)
+          MED=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="MEDIUM")] | length' trivy-report.json 2>/dev/null || echo 0)
+          LOW=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="LOW")] | length' trivy-report.json 2>/dev/null || echo 0)
           echo "critical=$CRIT" >> "$GITHUB_OUTPUT"
           echo "high=$HIGH" >> "$GITHUB_OUTPUT"
+          echo "medium=$MED" >> "$GITHUB_OUTPUT"
+          echo "low=$LOW" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
         if: always() && hashFiles('trivy-report.json') != ''
         with:
           name: trivy-report
           path: trivy-report.json
           retention-days: 30
-      - name: Security Policy Gate
+      - name: Create Trivy Findings Issue & Gate Deploy
         id: gate
-        if: ${{ vars.ALLOW_CRITICAL_CVES != 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           CRIT=${{ steps.count.outputs.critical }}
-          if [ "$CRIT" -gt 0 ]; then
-            echo "::error::$CRIT CRITICAL CVE(s) found. Blocking sign/push."
+          HIGH=${{ steps.count.outputs.high }}
+          MED=${{ steps.count.outputs.medium }}
+          LOW=${{ steps.count.outputs.low }}
+          TOTAL=$((CRIT + HIGH + MED + LOW))
+          
+          if [ "$TOTAL" -gt 0 ]; then
+            TITLE="[Security] Trivy vulnerability scan findings detected in commit ${{ github.sha }}"
+            
+            # Format body with summary and list first few CVEs
+            CVE_LIST=$(jq -r '[.Results[]?.Vulnerabilities[]? | "- **\(.VulnerabilityID)** (\(.Severity)): \(.PkgName) \(.InstalledVersion) -> Fix: \(.FixedVersion // "N/A")"] | join("\n")' trivy-report.json 2>/dev/null | head -n 30)
+            
+            BODY="🚨 **Trivy Container Scan** detected **$TOTAL** vulnerabilities in commit \`${{ github.sha }}\`
+            
+            ### Severity Summary:
+            - 🔴 **Critical**: $CRIT
+            - 🟠 **High**: $HIGH
+            - 🟡 **Medium**: $MED
+            - 🔵 **Low**: $LOW
+            
+            ### Top Findings (Max 30):
+            $CVE_LIST
+            
+            *Please resolve these findings by upgrading base images or updating dependencies.*"
+            
+            EXISTING_ISSUE=$(gh issue list --search "is:issue is:open \"$TITLE\"" --json number --jq '.[0].number' 2>/dev/null || echo "")
+            if [ -z "$EXISTING_ISSUE" ]; then
+              gh issue create --title "$TITLE" --body "$BODY" --label "security,vulnerability"
+            else
+              echo "Open issue already exists: #$EXISTING_ISSUE"
+            fi
+          fi
+          
+          # Gate logic
+          if [ "$CRIT" -gt 0 ] && [ "${{ vars.ALLOW_CRITICAL_CVES }}" != 'true' ]; then
+            echo "::error::$CRIT Critical CVE(s) found. Blocking deployment."
+            exit 1
+          fi
+          
+          if [ "$HIGH" -gt 0 ] && [ "${{ vars.ALLOW_HIGH_CVES }}" != 'true' ]; then
+            echo "::error::$HIGH High CVE(s) found. Blocking deployment."
             exit 1
           fi
 

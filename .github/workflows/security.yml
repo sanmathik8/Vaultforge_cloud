@@ -14,6 +14,7 @@ concurrency:
 permissions:
   contents: read
   security-events: write
+  issues: write
 
 env:
   APP_PATH: ${{ inputs.app_path || './app' }}
@@ -75,6 +76,7 @@ jobs:
     permissions:
       contents: read
       security-events: write
+      issues: write
     outputs:
       result: ${{ steps.gitleaks.outcome }}
     steps:
@@ -87,12 +89,23 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Handle failure
+      - name: Handle Gitleaks Failure & Create Issue
         if: steps.gitleaks.outcome == 'failure'
-        uses: ./.github/actions/graceful-exit
-        with:
-          stage: "Gitleaks Secrets Scan"
-          reason: "Exposed secrets were found. Remove the secret and rotate it if it was ever pushed."
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TITLE="[Security] Secret leak detected in commit ${{ github.sha }}"
+          BODY="🚨 **Gitleaks** detected exposed secrets in commit \`${{ github.sha }}\`. Please rotate the exposed credentials immediately and remove them from git history to prevent credentials compromise."
+          
+          EXISTING_ISSUE=$(gh issue list --search "is:issue is:open \"$TITLE\"" --json number --jq '.[0].number' 2>/dev/null || echo "")
+          if [ -z "$EXISTING_ISSUE" ]; then
+            gh issue create --title "$TITLE" --body "$BODY" --label "security,secret-leak"
+          else
+            echo "Open issue already exists: #$EXISTING_ISSUE"
+          fi
+          
+          echo "::error::Gitleaks scan failed. Exiting."
+          exit 1
 
   # ---------------------------------------------------------------
   # Stage 3: Hadolint - Dockerfile Best Practices
@@ -162,6 +175,7 @@ jobs:
     permissions:
       contents: read
       security-events: write
+      issues: write
     outputs:
       critical_count: ${{ steps.count.outputs.critical }}
       finding_count: ${{ steps.count.outputs.findings }}
@@ -207,13 +221,29 @@ jobs:
           name: semgrep-report
           path: semgrep.json
           retention-days: 30
-      - name: Gate on critical findings
+      - name: Semgrep Policy Gate & Issue Creation
         id: gate
-        if: ${{ vars.ALLOW_CRITICAL_CVES != 'true' }}
+        if: always() && steps.count.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          TOTAL=${{ steps.count.outputs.findings }}
           CRIT=${{ steps.count.outputs.critical }}
-          if [ "$CRIT" -gt 0 ]; then
-            echo "::error::$CRIT critical-severity Semgrep finding(s). Failing build."
+          
+          if [ "$TOTAL" -gt 0 ]; then
+            TITLE="[Security] Semgrep SAST findings detected in commit ${{ github.sha }}"
+            BODY="🚨 **Semgrep SAST Scan** detected **$TOTAL** finding(s), including **$CRIT** high-severity (ERROR) finding(s) in commit \`${{ github.sha }}\`. Please resolve these issues in the codebase."
+            
+            EXISTING_ISSUE=$(gh issue list --search "is:issue is:open \"$TITLE\"" --json number --jq '.[0].number' 2>/dev/null || echo "")
+            if [ -z "$EXISTING_ISSUE" ]; then
+              gh issue create --title "$TITLE" --body "$BODY" --label "security,sast"
+            else
+              echo "Open issue already exists: #$EXISTING_ISSUE"
+            fi
+          fi
+          
+          if [ "$CRIT" -gt 0 ] && [ "${{ vars.ALLOW_SEMGREP_ERRORS }}" != 'true' ]; then
+            echo "::error::$CRIT high-severity Semgrep finding(s) found. Failing build."
             exit 1
           fi
 
@@ -222,6 +252,7 @@ jobs:
   # ---------------------------------------------------------------
   taskdef-validation:
     name: ECS Task Definition JSON Validation
+    needs: django-system-check
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -231,23 +262,30 @@ jobs:
       - name: Validate Task Definition JSON syntax
         run: jq . ecs/task-definition.json
 
+  # ---------------------------------------------------------------
+  # Stage 7: IaC Checkov & Terraform Validation
+  # ---------------------------------------------------------------
   iac-validation:
     name: Checkov & Terraform Validation
+    needs: django-system-check
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: read
       security-events: write
+      issues: write
     steps:
       - uses: actions/checkout@v4
       - name: Run Checkov IaC Scan
         id: checkov
+        continue-on-error: true
         uses: bridgecrewio/checkov-action@master
         with:
           directory: terraform/bootstrap
           output_format: sarif
           output_file_path: checkov-results.sarif
-          soft_fail: true
+          soft_fail: false
+          args: --severity HIGH
       - name: Upload Checkov SARIF
         if: always() && hashFiles('checkov-results.sarif') != ''
         continue-on-error: true
@@ -255,6 +293,21 @@ jobs:
         with:
           sarif_file: checkov-results.sarif
           category: checkov
+      - name: Handle Checkov Failure & Create Issue
+        if: steps.checkov.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TITLE="[Security] Checkov IaC scan failed for commit ${{ github.sha }}"
+          BODY="🚨 **Checkov** detected high or critical severity IaC vulnerabilities in \`terraform/bootstrap\` for commit \`${{ github.sha }}\`. Please review and fix these vulnerabilities in your Terraform files."
+          
+          EXISTING_ISSUE=$(gh issue list --search "is:issue is:open \"$TITLE\"" --json number --jq '.[0].number' 2>/dev/null || echo "")
+          if [ -z "$EXISTING_ISSUE" ]; then
+            gh issue create --title "$TITLE" --body "$BODY" --label "security,iac"
+          else
+            echo "Open issue already exists: #$EXISTING_ISSUE"
+          fi
+          exit 1
       - uses: hashicorp/setup-terraform@v3
       - name: Terraform Validate
         working-directory: terraform/bootstrap
