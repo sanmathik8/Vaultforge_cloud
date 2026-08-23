@@ -66,8 +66,13 @@ jobs:
             echo "configured=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Fail if AWS role or digest not configured
+        if: steps.check-preconditions.outputs.configured != 'true'
+        run: |
+          echo "::error::AWS_ROLE_TO_ASSUME or image_digest is not set — failing explicitly."
+          exit 1
+
       - name: Configure AWS credentials via OIDC
-        if: steps.check-preconditions.outputs.configured == 'true'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
@@ -75,12 +80,10 @@ jobs:
           audience: sts.amazonaws.com
 
       - name: Login to Amazon ECR
-        if: steps.check-preconditions.outputs.configured == 'true'
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Multi-Tag Environment-Aware Infrastructure Discovery
         id: discover-infra
-        if: steps.check-preconditions.outputs.configured == 'true'
         run: |
           TARGET_ENV="${{ inputs.overlay || 'dev' }}"
           echo "Executing Multi-Tag Discovery for Project=VaultForge and Environment=$TARGET_ENV..."
@@ -151,16 +154,13 @@ jobs:
           echo "- **Validation Guard**: Verified Single-Resource Match for \`Project=VaultForge\` + \`Environment=${TARGET_ENV}\`" >> $GITHUB_STEP_SUMMARY
 
       - name: Install Cosign
-        if: steps.check-preconditions.outputs.configured == 'true'
         uses: sigstore/cosign-installer@v3
 
       - name: Cosign verify (pre-deploy sanity check)
-        if: steps.check-preconditions.outputs.configured == 'true'
         run: cosign verify ${{ inputs.image_digest }} --certificate-identity-regexp "https://github.com/sanmathik8/Vaultforge_cloud/.*" --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
 
       - name: Check ECS Service Active Image Checkpoint
         id: ecs-checkpoint
-        if: steps.check-preconditions.outputs.configured == 'true'
         run: |
           CLUSTER="${{ steps.discover-infra.outputs.cluster_name }}"
           SERVICE="${{ steps.discover-infra.outputs.service_name }}"
@@ -181,7 +181,7 @@ jobs:
           fi
 
       - name: Render Task Definition with signed image digest & execution roles
-        if: steps.check-preconditions.outputs.configured == 'true' && steps.ecs-checkpoint.outputs.already_deployed != 'true'
+        if: steps.ecs-checkpoint.outputs.already_deployed != 'true'
         id: render-taskdef
         run: |
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
@@ -197,14 +197,14 @@ jobs:
           echo "Task definition rendered successfully with execution role $EXEC_ROLE_ARN"
 
       - name: Register ECS Task Definition
-        if: steps.check-preconditions.outputs.configured == 'true' && steps.ecs-checkpoint.outputs.already_deployed != 'true'
+        if: steps.ecs-checkpoint.outputs.already_deployed != 'true'
         id: register-taskdef
         run: |
           TASK_DEF_ARN=$(aws ecs register-task-definition --cli-input-json file://rendered-taskdef.json --query 'taskDefinition.taskDefinitionArn' --output text)
           echo "task_def_arn=$TASK_DEF_ARN" >> "$GITHUB_OUTPUT"
 
       - name: Update ECS Service (Rolling Deployment)
-        if: steps.check-preconditions.outputs.configured == 'true' && steps.ecs-checkpoint.outputs.already_deployed != 'true'
+        if: steps.ecs-checkpoint.outputs.already_deployed != 'true'
         id: rollout
         continue-on-error: true
         run: |
@@ -214,7 +214,6 @@ jobs:
           aws ecs wait services-stable --cluster "$CLUSTER" --services "$SERVICE"
 
       - name: Application health check via ALB
-        if: steps.check-preconditions.outputs.configured == 'true'
         run: |
           CLUSTER="${{ steps.discover-infra.outputs.cluster_name }}"
           SERVICE="${{ steps.discover-infra.outputs.service_name }}"
