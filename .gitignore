@@ -16,3 +16,6 @@ __pycache__/
 *.pyc
 *.pyo
 .pytest_cache/
+
+# Sample demonstration artifacts (ignored for interview)
+samples/
