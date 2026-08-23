@@ -27,12 +27,7 @@ resource "aws_iam_role" "ecr_push" {
       Condition = {
         StringLike = {
           "token.actions.githubusercontent.com:sub" = [
-            "repo:sanmathik8*:*",
-            "repo:sanmathik8@*:*",
-            "repo:sanmathik8/Vaultforge:*",
-            "repo:sanmathik8/VaultForge:*",
-            "repo:sanmathik8/Vaultforge_cloud:*",
-            "repo:sanmathik8/VaultForge_cloud:*"
+            "repo:${var.github_repo}:*"
           ]
         }
       }
@@ -78,12 +73,7 @@ resource "aws_iam_role" "eks_deploy" {
       Condition = {
         StringLike = {
           "token.actions.githubusercontent.com:sub" = [
-            "repo:sanmathik8*:*",
-            "repo:sanmathik8@*:*",
-            "repo:sanmathik8/Vaultforge:*",
-            "repo:sanmathik8/VaultForge:*",
-            "repo:sanmathik8/Vaultforge_cloud:*",
-            "repo:sanmathik8/VaultForge_cloud:*"
+            "repo:${var.github_repo}:*"
           ]
         }
       }
@@ -127,7 +117,10 @@ resource "aws_iam_role_policy" "eks_deploy" {
       {
         Effect   = "Allow"
         Action   = ["iam:PassRole"]
-        Resource = "*"
+        Resource = [
+          "arn:aws:iam::*:role/vault-forge-ecs-execution-role",
+          "arn:aws:iam::*:role/vault-forge-ecs-task-role"
+        ]
       }
     ]
   })
@@ -146,12 +139,7 @@ resource "aws_iam_role" "terraform_bootstrap" {
       Condition = {
         StringLike = {
           "token.actions.githubusercontent.com:sub" = [
-            "repo:sanmathik8*:*",
-            "repo:sanmathik8@*:*",
-            "repo:sanmathik8/Vaultforge:*",
-            "repo:sanmathik8/VaultForge:*",
-            "repo:sanmathik8/Vaultforge_cloud:*",
-            "repo:sanmathik8/VaultForge_cloud:*"
+            "repo:${var.github_repo}:*"
           ]
         }
       }

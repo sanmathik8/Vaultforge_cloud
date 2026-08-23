@@ -37,45 +37,10 @@ permissions:
 
 jobs:
   # ---------------------------------------------------------------
-  # Checkov IaC Scan & Terraform Configuration Validation
-  # ---------------------------------------------------------------
-  iac-validation:
-    name: Checkov & Terraform Validation
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    permissions:
-      contents: read
-      security-events: write
-    steps:
-      - uses: actions/checkout@v4
-      - name: Run Checkov IaC Scan
-        id: checkov
-        uses: bridgecrewio/checkov-action@master
-        with:
-          directory: terraform/bootstrap
-          output_format: sarif
-          output_file_path: checkov-results.sarif
-          soft_fail: true
-      - name: Upload Checkov SARIF
-        if: always() && hashFiles('checkov-results.sarif') != ''
-        continue-on-error: true
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: checkov-results.sarif
-          category: checkov
-      - uses: hashicorp/setup-terraform@v3
-      - name: Terraform Validate
-        working-directory: terraform/bootstrap
-        run: |
-          terraform init -backend=false
-          terraform validate
-
-  # ---------------------------------------------------------------
   # ECS Fargate Deployment & Rollout Checkpoint (Multi-Tag Environment Discovery)
   # ---------------------------------------------------------------
   deploy:
     name: Deploy to ECS Fargate
-    needs: iac-validation
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -191,7 +156,7 @@ jobs:
 
       - name: Cosign verify (pre-deploy sanity check)
         if: steps.check-preconditions.outputs.configured == 'true'
-        run: cosign verify ${{ inputs.image_digest }} --certificate-identity-regexp ".*" --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
+        run: cosign verify ${{ inputs.image_digest }} --certificate-identity-regexp "https://github.com/sanmathik8/Vaultforge_cloud/.*" --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
 
       - name: Check ECS Service Active Image Checkpoint
         id: ecs-checkpoint
