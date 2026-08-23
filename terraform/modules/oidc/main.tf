@@ -30,8 +30,8 @@ resource "aws_iam_role" "ecr_push" {
         }
         StringLike = {
           "token.actions.githubusercontent.com:sub" = [
-            "repo:${var.github_repo}:*",
-            "repo:${replace(var.github_repo, "Vaultforge", "VaultForge")}:*"
+            "repo:sanmathik8@180301003/Vaultforge_cloud@1319752793:*",
+            "repo:sanmathik8@180301003/VaultForge_cloud@1319752793:*"
           ]
         }
       }
@@ -80,8 +80,8 @@ resource "aws_iam_role" "eks_deploy" {
         }
         StringLike = {
           "token.actions.githubusercontent.com:sub" = [
-            "repo:${var.github_repo}:*",
-            "repo:${replace(var.github_repo, "Vaultforge", "VaultForge")}:*"
+            "repo:sanmathik8@180301003/Vaultforge_cloud@1319752793:*",
+            "repo:sanmathik8@180301003/VaultForge_cloud@1319752793:*"
           ]
         }
       }
@@ -150,8 +150,8 @@ resource "aws_iam_role" "terraform_bootstrap" {
         }
         StringLike = {
           "token.actions.githubusercontent.com:sub" = [
-            "repo:${var.github_repo}:*",
-            "repo:${replace(var.github_repo, "Vaultforge", "VaultForge")}:*"
+            "repo:sanmathik8@180301003/Vaultforge_cloud@1319752793:*",
+            "repo:sanmathik8@180301003/VaultForge_cloud@1319752793:*"
           ]
         }
       }
