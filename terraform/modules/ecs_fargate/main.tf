@@ -238,6 +238,11 @@ resource "aws_ecs_service" "app" {
   deployment_minimum_healthy_percent = 100
   tags                               = local.common_tags
 
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
+
   network_configuration {
     subnets          = data.aws_subnets.default.ids
     security_groups  = [aws_security_group.ecs_tasks.id]

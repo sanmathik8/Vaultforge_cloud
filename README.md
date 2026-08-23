@@ -17,10 +17,10 @@ In modern cloud deployments, container build pipelines frequently suffer from cr
 
 ### The VaultForge Solution
 VaultForge is a reference **DevSecOps infrastructure platform** that secures containerized workloads from code commit to Amazon ECS Fargate runtime:
-- **Zero Static Credentials:** Authenticates to AWS via passwordless **OpenID Connect (OIDC)** token exchange.
-- **Automated Security Gates:** Scans Infrastructure as Code with **Checkov**, checks container vulnerability CVEs with **Trivy**, and generates CycloneDX Software Bill of Materials (SBOMs) with **Syft**.
-- **Cryptographic Supply-Chain Verification:** Signs container images keylessly with **Cosign** (Sigstore) using ephemeral OIDC tokens.
-- **Runtime Hardening:** Deploys tasks to **Amazon ECS Fargate** as non-root users (`user: 10001:10001`) with read-only root filesystems (`readonlyRootFilesystem: true`).
+- **Zero Static Credentials:** Authenticates to AWS via passwordless **OpenID Connect (OIDC)** token exchange mapped to exact user & repository database IDs.
+- **Automated Correctness & Security Gates:** Validates application code with Django unit tests before running security gates—Gitleaks (secrets), Hadolint (Docker), OSV-Scanner (SCA), Semgrep (SAST), and Checkov (IaC).
+- **Cryptographic Supply-Chain Verification:** Signs container images keylessly with **Cosign** (Sigstore) and verifies signature integrity strictly scoped to the repository origin during deploy.
+- **Runtime Hardening & Resiliency:** Deploys tasks to **Amazon ECS Fargate** under non-root UID `10001` with a read-only root filesystem (`readonlyRootFilesystem = true`), restricted egress (ports 443 & 53), and active ECS Deployment Circuit Breaker auto-rollbacks.
 
 ---
 
@@ -66,10 +66,10 @@ VaultForge/
 ├── .github/
 │   └── workflows/
 │       ├── pipeline.yml            # Main CI/CD Orchestrator Workflow
-│       ├── security.yml            # Checkov IaC & Trivy Vulnerability Scan
-│       ├── build.yml               # Docker Build, Syft SBOM & Cosign Signing
-│       ├── deploy.yml              # ECS Fargate Deployment Workflow
-│       ├── validate.yml            # ALB Health Check Validation
+│       ├── security.yml            # Unit Tests, Linting, SAST, SCA, Checkov & TF Validate
+│       ├── build.yml               # Checkpoint, Docker Build, Syft SBOM, Trivy & Cosign Sign
+│       ├── deploy.yml              # ECS Fargate Rollout & Cosign Verify Verification
+│       ├── validate.yml            # ALB Health Check Smoke Tests & OWASP ZAP DAST
 │       └── infra-bootstrap.yml     # Infrastructure Bootstrap Pipeline
 ├── ecs/
 │   └── task-definition.json        # Hardened Non-Root ECS Task Specification
@@ -78,12 +78,12 @@ VaultForge/
 │   ├── variables.tf                # Environment Variables
 │   ├── outputs.tf                  # Infrastructure Endpoints & ECR URIs
 │   └── modules/
-│       ├── oidc/                   # IAM OpenID Connect Provider & Roles
+│       ├── oidc/                   # IAM OpenID Connect Provider & Roles (ID-mapped)
 │       ├── ecr/                    # Amazon ECR Repository Definition
-│       └── ecs_fargate/            # ECS Cluster, Task & ALB Definitions
-├── app/                            # Sample Workload Application
-│   ├── app.py                      # Flask Application Server
-│   └── Dockerfile                  # Multi-Stage Hardened Dockerfile
+│       └── ecs_fargate/            # ECS Cluster, Task, ALB & Deployment Circuit Breaker
+├── app/                            # Sample Workload Application (OWASP PyGoat Django)
+│   ├── manage.py                   # Django App Entrypoint
+│   └── Dockerfile                  # Hardened Non-Root Django container
 ├── scripts/
 │   └── smoke-test.sh               # Post-Deployment Endpoint Health Verification
 └── README.md                       # Comprehensive Project Documentation

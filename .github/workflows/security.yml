@@ -20,10 +20,35 @@ env:
 
 jobs:
   # ---------------------------------------------------------------
+  # Stage 0: Run Application correctness checks (Unit Tests)
+  # ---------------------------------------------------------------
+  application-tests:
+    name: Django Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Install dependencies
+        working-directory: ${{ env.APP_PATH }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run Django Tests
+        working-directory: ${{ env.APP_PATH }}
+        run: python manage.py test
+
+  # ---------------------------------------------------------------
   # Stage 1: Validate Dockerfile exists
   # ---------------------------------------------------------------
   validate-dockerfile:
     name: Validate Dockerfile
+    needs: application-tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
