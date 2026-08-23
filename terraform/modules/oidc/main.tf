@@ -25,9 +25,13 @@ resource "aws_iam_role" "ecr_push" {
       Principal = { Federated = aws_iam_openid_connect_provider.github.arn }
       Action    = "sts:AssumeRoleWithWebIdentity"
       Condition = {
+        StringEquals = {
+          "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+        }
         StringLike = {
           "token.actions.githubusercontent.com:sub" = [
-            "repo:${var.github_repo}:*"
+            "repo:${var.github_repo}:*",
+            "repo:${replace(var.github_repo, "Vaultforge", "VaultForge")}:*"
           ]
         }
       }
@@ -71,9 +75,13 @@ resource "aws_iam_role" "eks_deploy" {
       Principal = { Federated = aws_iam_openid_connect_provider.github.arn }
       Action    = "sts:AssumeRoleWithWebIdentity"
       Condition = {
+        StringEquals = {
+          "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+        }
         StringLike = {
           "token.actions.githubusercontent.com:sub" = [
-            "repo:${var.github_repo}:*"
+            "repo:${var.github_repo}:*",
+            "repo:${replace(var.github_repo, "Vaultforge", "VaultForge")}:*"
           ]
         }
       }
@@ -137,9 +145,13 @@ resource "aws_iam_role" "terraform_bootstrap" {
       Principal = { Federated = aws_iam_openid_connect_provider.github.arn }
       Action    = "sts:AssumeRoleWithWebIdentity"
       Condition = {
+        StringEquals = {
+          "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+        }
         StringLike = {
           "token.actions.githubusercontent.com:sub" = [
-            "repo:${var.github_repo}:*"
+            "repo:${var.github_repo}:*",
+            "repo:${replace(var.github_repo, "Vaultforge", "VaultForge")}:*"
           ]
         }
       }
